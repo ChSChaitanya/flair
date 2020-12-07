@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from typing import List, Union, Optional, Dict
 from warnings import warn
+from itertools import repeat
 
 import numpy as np
 import torch
@@ -20,6 +21,8 @@ from flair.datasets import SentenceDataset, DataLoader
 from flair.embeddings import TokenEmbeddings, StackedEmbeddings, Embeddings
 from flair.file_utils import cached_path, unzip_file
 from flair.training_utils import Metric, Result, store_embeddings
+
+from multiprocessing import Pool
 
 log = logging.getLogger("flair")
 
@@ -392,6 +395,32 @@ class SequenceTagger(flair.nn.Model):
 
             if return_loss:
                 return overall_loss / batch_no
+
+    def predict_multi_wrapper(self, fn, sentences, kwargs):
+        fn(sentences, **kwargs)
+        return sentences
+
+    def equal_batch_sizes(self, seq, num):
+        avg = len(seq) / float(num)
+        out = []
+        last = 0.0
+
+        while last < len(seq):
+            out.append(seq[int(last):int(last + avg)])
+            last += avg
+
+        return out
+
+    def predict_multi(self, sentences, processes: int = 2, **kwargs):
+        sentences = self.equal_batch_sizes(sentences, processes)
+        args_for_starmap = zip(repeat(self.predict), sentences, repeat(kwargs))  # hier packe ich die iters zusammen
+
+        with Pool(processes) as p:
+            sentences = p.starmap(self.predict_multi_wrapper, args_for_starmap)  # hier wird die wrapper func gebraucht
+
+        sentences = [item for sublist in sentences for item in sublist]
+
+        return sentences
 
     def _requires_span_F1_evaluation(self) -> bool:
         span_F1 = False
