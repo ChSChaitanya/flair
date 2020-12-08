@@ -22,7 +22,7 @@ from flair.embeddings import TokenEmbeddings, StackedEmbeddings, Embeddings
 from flair.file_utils import cached_path, unzip_file
 from flair.training_utils import Metric, Result, store_embeddings
 
-from multiprocessing import Pool
+from multiprocessing import Pool, set_start_method
 
 log = logging.getLogger("flair")
 
@@ -414,7 +414,7 @@ class SequenceTagger(flair.nn.Model):
     def predict_multi(self, sentences, processes: int = 2, **kwargs):
         sentences = self.equal_batch_sizes(sentences, processes)
         args_for_starmap = zip(repeat(self.predict), sentences, repeat(kwargs))  # hier packe ich die iters zusammen
-
+        set_start_method('spawn')
         with Pool(processes) as p:
             sentences = p.starmap(self.predict_multi_wrapper, args_for_starmap)  # hier wird die wrapper func gebraucht
 
